@@ -1,0 +1,584 @@
+---
+---
+---
+
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Cleaning and Preparation
+
+```{r}
+# Read the dataset
+df <- read.csv("Telecom.csv")
+```
+
+```{r}
+# Data Summary and Structure
+names(df)
+```
+
+```{r}
+# Data Summary and Structure
+names(df)
+```
+
+```{r}
+summary(df)
+```
+
+```{r}
+str(df)
+library(ggplot2)
+```
+
+```{r}
+# Data Summary and Structure
+
+summary(df)
+str(df)
+
+
+```
+
+```{r}
+# Data Type Conversion
+
+df$gender <- factor(df$gender)
+df$SeniorCitizen <- factor(df$SeniorCitizen) # Converting to factor can help in analysis even though it's binary
+df$Partner <- factor(df$Partner)
+df$Dependents <- factor(df$Dependents)
+df$PhoneService <- factor(df$PhoneService)
+df$MultipleLines <- factor(df$MultipleLines)
+df$InternetService <- factor(df$InternetService)
+df$OnlineSecurity <- factor(df$OnlineSecurity)
+df$OnlineBackup <- factor(df$OnlineBackup)
+df$DeviceProtection <- factor(df$DeviceProtection)
+df$TechSupport <- factor(df$TechSupport)
+df$StreamingTV <- factor(df$StreamingTV)
+df$StreamingMovies <- factor(df$StreamingMovies)
+df$Contract <- factor(df$Contract)
+df$PaperlessBilling <- factor(df$PaperlessBilling)
+df$PaymentMethod <- factor(df$PaymentMethod)
+df$Churn <- factor(df$Churn)
+```
+
+```{r}
+str(df)
+```
+
+# We will be checking the missing values/NA/null values in the dataset by running the following script
+
+```{r}
+# Count NA values for each column
+na_count <- sapply(df, function(x) sum(is.na(x)))
+
+# Additionally, for factors, count levels that might represent missing values (e.g., "", " ")
+adjusted_na_count <- sapply(df, function(x) {
+  if (is.factor(x)) {
+    sum(x %in% c("", " ")) + sum(is.na(x))
+  } else {
+    sum(is.na(x))
+  }
+})
+
+# Combine the counts into a data frame for a cleaner view
+na_summary <- data.frame(Column = names(adjusted_na_count), NA_Count = adjusted_na_count)
+
+# Print the summary of missing values
+print(na_summary)
+
+# Create a bar chart to visualize missing values
+ggplot(na_summary, aes(x = Column, y = NA_Count)) + 
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme(axis.text.x = element_text(angle = 65, hjust = 1)) + # Rotate x-axis labels for readability
+  labs(y = "Number of Missing Values", 
+       x = "Column", 
+       title = "Missing Values in Each Column") +
+  geom_text(aes(label=NA_Count), position = position_stack(vjust = 0.5), size=3) # Add value labels
+```
+
+```{r}
+# Function to calculate mode (most frequent value)
+get_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+# Impute missing values in the dataset
+impute_data <- function(df) {
+  df[] <- lapply(df, function(x) {
+    if (is.numeric(x)) {
+      # Impute numeric columns with median
+      x[is.na(x)] <- median(x, na.rm = TRUE)
+    } else if (is.factor(x)) {
+      # Impute factor columns with mode
+      mode_value <- get_mode(x)
+      x[is.na(x) | x %in% c("", " ")] <- mode_value # Also consider "" and " " as missing for factors
+    }
+    return(x)
+  })
+  return(df)
+}
+
+
+# Apply the imputation
+df_imputed <- impute_data(df)
+
+# Check if the imputation has been done properly by summarizing missing values again
+summary_imputed <- sapply(df_imputed, function(x) sum(is.na(x)))
+print(summary_imputed)
+```
+
+```{r}
+str(df_imputed)
+```
+
+# Checking for categorical values spelling checks
+
+```{r}
+categorical_columns <- sapply(df_imputed, function(x) is.factor(x) | is.character(x)) & names(df_imputed) != "customerID"
+
+# Loop through each categorical column (excluding 'customerID') to print the frequency table
+for (column_name in names(df_imputed)[categorical_columns]) {
+  cat("Frequency table for", column_name, ":\n")
+  
+  # Generate frequency table
+  freq_table <- table(df_imputed[[column_name]])
+  
+  # Filter out categories with a 0 count
+  freq_table <- freq_table[freq_table > 0]
+  
+  # Check if the filtered table is not empty before printing
+  if (length(freq_table) > 0) {
+    print(freq_table)
+  } else {
+    cat("All categories have non-zero counts or column is not present.\n")
+  }
+  
+  cat("\n") # Add a newline for better readability between tables
+}
+```
+
+```{r}
+# Load necessary library
+library(dplyr)
+
+# 1. Impute 'Unknown' in gender with mode
+mode_gender <- names(sort(table(df_imputed$gender), decreasing = TRUE))[1]
+df_imputed$gender[df_imputed$gender == "Unknown"] <- mode_gender
+
+# 2. MultipleLines: Impute 'No phone service' with 'No'
+df_imputed$MultipleLines[df_imputed$MultipleLines == "No phone service"] <- "No"
+
+# 3. InternetService: Impute 'Fibre Optics' to 'Fiber optic'
+df_imputed$InternetService[df_imputed$InternetService == "Fibre Optics"] <- "Fiber optic"
+
+# 4. OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport, StreamingTV, StreamingMovies: Impute 'No internet service' to 'No'
+service_columns <- c("OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies")
+
+df_imputed[service_columns] <- lapply(df_imputed[service_columns], function(x) {
+  x[x == "No internet service"] <- "No"
+  return(x)
+})
+
+# Optionally, check changes for one of the columns to confirm
+table(df_imputed$MultipleLines)
+```
+
+```{r}
+# Frequency table for 'gender' to check 'Unknown' imputation
+cat("Frequency table for gender:\n")
+print(table(df_imputed$gender))
+cat("\n")
+
+# Frequency table for 'MultipleLines' to check 'No phone service' imputation
+cat("Frequency table for MultipleLines:\n")
+print(table(df_imputed$MultipleLines))
+cat("\n")
+
+# Frequency table for 'InternetService' to check 'Fibre Optics' correction
+cat("Frequency table for InternetService:\n")
+print(table(df_imputed$InternetService))
+cat("\n")
+
+# Frequency tables for service-related columns to check 'No internet service' imputation
+service_columns <- c("OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies")
+for (col in service_columns) {
+  cat(paste("Frequency table for", col, ":\n"))
+  print(table(df_imputed[[col]]))
+  cat("\n")
+}
+```
+
+# Check if there is any negative values in the dataset for numeric columns
+
+```{r}
+# Calculate the count of negative values
+negative_values_count <- sum(df_imputed$MonthlyCharges < 0)
+
+# Print the count
+cat("Count of negative values in MonthlyCharges:", negative_values_count, "\n")
+
+# Count of negative values in the TotalCharges column of df_imputed
+negative_values_count_total_charges <- sum(df_imputed$TotalCharges < 0)
+
+# Print the count for TotalCharges
+cat("Count of negative values in TotalCharges:", negative_values_count_total_charges, "\n")
+
+# Count of negative values in the tenure column of df_imputed
+negative_values_count_tenure <- sum(df_imputed$tenure < 0)
+
+# Print the count for tenure
+cat("Count of negative values in tenure:", negative_values_count_tenure, "\n")
+
+```
+
+```{r}
+# Apply absolute value to tenure, MonthlyCharges, and TotalCharges columns
+
+df_imputed$tenure <- abs(df_imputed$tenure)
+df_imputed$MonthlyCharges <- abs(df_imputed$MonthlyCharges)
+df_imputed$TotalCharges <- abs(df_imputed$TotalCharges)
+
+# Optionally, you can print a few rows to verify the changes
+head(df_imputed[c("tenure", "MonthlyCharges", "TotalCharges")])
+```
+
+# In the below section, we will do the outlier check
+
+```{r}
+# Assuming your dataframe is named df_imputed
+
+# Numeric columns identified from your description
+numeric_columns <- c("tenure", "MonthlyCharges", "TotalCharges")
+
+# Function to identify outliers
+identify_outliers <- function(data, column_name) {
+  # Calculate IQR
+  Q1 <- quantile(data[[column_name]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(data[[column_name]], 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  
+  # Define bounds for outliers
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  # Identify outliers
+  outliers <- which(data[[column_name]] < lower_bound | data[[column_name]] > upper_bound)
+  
+  return(list(column_name = column_name, lower_bound = lower_bound, upper_bound = upper_bound, outliers = outliers))
+}
+
+# Apply the function to each numeric column and store the results
+outlier_results <- lapply(numeric_columns, function(col) identify_outliers(df_imputed, col))
+
+# Print the results for each numeric column
+for (result in outlier_results) {
+  cat("Outliers for", result$column_name, ":\n")
+  cat("Lower bound:", result$lower_bound, "\n")
+  cat("Upper bound:", result$upper_bound, "\n")
+  cat("Outliers at rows:", paste(result$outliers, collapse = ", "), "\n\n")
+}
+```
+
+```{r}
+# Assuming the lower and upper bounds for TotalCharges as identified
+lower_bound <- -4685.65
+upper_bound <- 8883.35
+
+# Cap outliers in the TotalCharges column
+df_imputed$TotalCharges <- ifelse(df_imputed$TotalCharges < lower_bound, lower_bound, 
+                                  ifelse(df_imputed$TotalCharges > upper_bound, upper_bound, 
+                                         df_imputed$TotalCharges))
+
+# Check if the fix is done by finding any new outliers
+new_outliers <- which(df_imputed$TotalCharges < lower_bound | df_imputed$TotalCharges > upper_bound)
+
+# Print the result of the check
+if(length(new_outliers) == 0) {
+  cat("No outliers are present in TotalCharges after correction.\n")
+} else {
+  cat("Outliers still present at rows:", paste(new_outliers, collapse = ", "), "in TotalCharges.\n")
+}
+
+```
+
+```{r}
+str(df_imputed)
+table(df_imputed$OnlineBackup)
+```
+
+# Removing unused level for cateogrical columns
+
+```{r}
+# Apply droplevels() to all categorical (factor) columns in the dataframe
+df_imputed <- lapply(df_imputed, function(column) {
+  if (is.factor(column)) {
+    return(droplevels(column))
+  } else {
+    return(column)
+  }
+})
+
+# Convert the list back to a dataframe if lapply converts it to a list
+df_imputed <- as.data.frame(df_imputed)
+
+# Check the levels for a specific factor column to verify the cleanup
+# Replace 'OnlineSecurity' with the name of any categorical column you're interested in
+table(df_imputed$OnlineSecurity)
+
+str(df_imputed)
+```
+
+#customerID is not much useful in our analysis, hence we are removing this:
+
+```{r}
+# Remove customerID column using select() function
+df_imputed <- select(df_imputed, -customerID)
+```
+
+```{r}
+summary(df_imputed)
+```
+
+```{r}
+# Check for 0 values in the MonthlyCharges column
+zero_monthly_charges <- sum(df_imputed$MonthlyCharges == 0)
+
+# If there are 0 values, impute them with the median
+if (zero_monthly_charges > 0) {
+  median_monthly_charges <- median(df_imputed$MonthlyCharges[df_imputed$MonthlyCharges > 0]) # Exclude 0 values when calculating the median
+  df_imputed$MonthlyCharges[df_imputed$MonthlyCharges == 0] <- median_monthly_charges
+}
+
+# Check if the imputation was successful
+zero_monthly_charges_after_imputation <- sum(df_imputed$MonthlyCharges == 0)
+
+# Output the counts before and after imputation
+cat("Number of 0 values before imputation:", zero_monthly_charges, "\n")
+cat("Number of 0 values after imputation:", zero_monthly_charges_after_imputation, "\n")
+```
+
+```{r}
+summary(df_imputed)
+```
+
+# EDA
+
+Distribution of numerical columns using histogram
+
+```{r}
+ggplot(df_imputed, aes(x = tenure)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Tenure",
+       x = "Tenure",
+       y = "Frequency")
+ggplot(df_imputed, aes(x = TotalCharges)) +
+  geom_histogram(binwidth = 200, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Total charges",
+       x = "Total charges",
+       y = "Frequency")
+ggplot(df_imputed, aes(x = MonthlyCharges)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Monthly charges",
+       x = "Monthly charges",
+       y = "Frequency")
+```
+
+# Distribution of categorical columns
+
+```{r}
+ggplot(df_imputed, aes(x = gender)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of gender",
+       x = "gender",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = SeniorCitizen)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of senior citizen",
+       x = "senior citizen",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = Partner)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of partner",
+       x = "partner",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = Dependents)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of dependents",
+       x = "dependents",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = PhoneService)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of phone service",
+       x = "phone service",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = MultipleLines)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of multiple lines",
+       x = "multiple lines",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = InternetService)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of internet service",
+       x = "internet service",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = OnlineSecurity)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of online security",
+       x = "online security",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = OnlineBackup)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of online backup",
+       x = "online backup",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = DeviceProtection)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of device protection",
+       x = "device protection",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = TechSupport)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of tech support",
+       x = "tech support",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = StreamingTV)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of streaming tv",
+       x = "streaming tv",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = StreamingMovies)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of streaming movies",
+       x = "streaming movies",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = Contract)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of contract",
+       x = "contract",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = PaperlessBilling)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of paperless billing",
+       x = "paperless billing",
+       y = "Frequency")
+
+ggplot(df_imputed, aes(x = PaymentMethod)) + geom_bar(fill = "skyblue", color = "black") + labs(title = "Distribution of payment method",
+       x = "payment method",
+       y = "Frequency")
+```
+
+# Boxplot of numerical columns with target variable
+
+```{r}
+ggplot(df_imputed, aes(x = Churn, y = MonthlyCharges , fill=Churn)) +
+  geom_boxplot(color="black") +
+  labs(title = "Boxplot of Monthly Charges by Churn",
+       x = "Churn",
+       y = "Monthly Charges") 
+
+ggplot(df_imputed, aes(x = Churn, y = TotalCharges , fill=Churn)) +
+  geom_boxplot(color="black") +
+  labs(title = "Boxplot of Total Charges by Churn",
+       x = "Churn",
+       y = "Total Charges")
+
+ggplot(df_imputed, aes(x = Churn, y = tenure , fill=Churn)) +
+  geom_boxplot(color="black") +
+  labs(title = "Boxplot of tenure by Churn",
+       x = "Churn",
+       y = "tenure") 
+```
+
+# Mosaic plot of categorical columns with target variable
+
+```{r}
+mosaicplot(table(df_imputed$Churn, df_imputed$gender), main = "Mosaic Plot of Churn and gender",
+            xlab = "Churn", ylab = "gender", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$SeniorCitizen), main = "Mosaic Plot of Churn and Senior citizen",
+            xlab = "Churn", ylab = "Senior citizen", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$Partner), main = "Mosaic Plot of Churn and Partner",
+            xlab = "Churn", ylab = "Partner", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$Dependents), main = "Mosaic Plot of Churn and dependents",
+            xlab = "Churn", ylab = "dependents", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$PhoneService), main = "Mosaic Plot of Churn and Phone service",
+            xlab = "Churn", ylab = "phone service", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$MultipleLines), main = "Mosaic Plot of Churn and multiple lines",
+            xlab = "Churn", ylab = "multiple lines", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$InternetService), main = "Mosaic Plot of Churn and Internet service",
+            xlab = "Churn", ylab = "internet service", color = c("skyblue", "salmon","yellow") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$OnlineSecurity), main = "Mosaic Plot of Churn and online security",
+            xlab = "Churn", ylab = "online security", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$OnlineBackup), main = "Mosaic Plot of Churn and online backup",
+            xlab = "Churn", ylab = "online backup", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$DeviceProtection), main = "Mosaic Plot of Churn and device protection",
+            xlab = "Churn", ylab = "device protection", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$TechSupport), main = "Mosaic Plot of Churn and tech support",
+            xlab = "Churn", ylab = "tech support", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$StreamingTV), main = "Mosaic Plot of Churn and streaming tv",
+            xlab = "Churn", ylab = "streaming tv", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$StreamingMovies), main = "Mosaic Plot of Churn and streaming movies",
+            xlab = "Churn", ylab = "streaming movies", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$Contract), main = "Mosaic Plot of Churn and contract",
+            xlab = "Churn", ylab = "contract", color=c("skyblue","salmon","yellow") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$PaperlessBilling), main = "Mosaic Plot of Churn and paperless billing",
+            xlab = "Churn", ylab = "paperless billing", color = c("skyblue", "salmon") )
+
+mosaicplot(table(df_imputed$Churn, df_imputed$PaymentMethod), main = "Mosaic Plot of Churn and payment method",
+            xlab = "Churn", ylab = "payment method", color = c("skyblue", "salmon","yellow","purple"), las=1)
+            
+
+
+```
+
+# correlation matrix numerical columns and target variable
+
+```{r}
+df_imputed$Churn_num<-ifelse(df_imputed$Churn=="Yes",1,0)
+cor_matrix<-cor(df_imputed[c('Churn_num','TotalCharges','MonthlyCharges','tenure')])
+print(cor_matrix)
+```
+
+## Chi-Square Test
+
+As we have categorical variables and our target variable is also categorical, we are going to use chi-square test. This test is used to determine if there is a significant association between two categorical variables. The output would be p-value and:
+
+1.  if p-value \< 0.05 then, there is a significant association between the two variables.
+
+2.  if p-value \> 0.05 then, there is no significant association between the two variables
+
+First, we make the contingency tables. and then we implement the chi-square test.
+
+```{r}
+# first we exclude the numerical columns
+df_categorical <- df_imputed[, !(names(df_imputed) %in%  c('tenure', 'MonthlyCharges', 'TotalCharges', 'Churn'))]
+target <- df_imputed$'Churn'
+
+
+
+for (col in colnames(df_categorical)) {
+  # Create a contingency table
+  contingency_table <- table(df_categorical[[col]], target)
+
+  # Implement chi-squared test
+  result <- chisq.test(contingency_table)
+
+
+  cat("Variable:", col, "\n")
+  cat("Chi-squared test p-value:", result$p.value, "\n")
+
+  
+  if (result$p.value < 0.05) {
+    cat("There is a significant association between", col, "and the target variable.\n\n")
+  } else {
+    cat("There is no significant association between", col, "and the target variable.\n\n")
+  }
+}
+```
+
+```{}
+```
